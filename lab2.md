@@ -174,6 +174,297 @@ grub-install /dev/sda
 ### Вывод
 Собственноручно провели горячую замену жесткого диска, и установили новый диск в зеркальный RAID массив в паре с старым диском. Изучили новые команды.
 
+## Задание 3 (Добавление новых дисков и перенос раздела)
+
+Отключаем один жесткий диск (эмуляция отказа), смотрим состояние дисков
+```
+cat /proc/mdstat
+```
+Видим RAID активен на одном диске sda
+```
+lsblk
+```
+Информация также выведена только об одном диске sda
+![300](https://github.com/afpetrenko/OS/blob/master/lab2/300.png)
+
+На ходу подключаем новый диск, проверяем.
+Диск sdb появился в выводе.
+![301](https://github.com/afpetrenko/OS/blob/master/lab2/301.png)
+
+При помощи
+```
+sfdisk -d /dev/sda | sfdisk /dev/sdb
+```
+Переносим файловую таблицу на новый диск
+Выполняем команду
+```
+lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT
+```
+Видим что новый диск sdb разметился как и старый sda на две части: sdb1, sdb2.
+![302](https://github.com/afpetrenko/OS/blob/master/lab2/302.png)
+
+Выполняем команду
+```
+dd if=/dev/sda1 of=/dev/sdb1
+```
+Копируем данные /boot на новый диск
+![303](https://github.com/afpetrenko/OS/blob/master/lab2/303.png))
+
+```
+mount | grep boot
+```
+Видим что /boot смонтирован на sda1
+```
+umount /boot
+```
+Отмонтировали /boot
+```
+mount -a
+```
+Монтирование точек согласно /etc/fstab
+Перемонтировали /boot на sdb1
+![304](https://github.com/afpetrenko/OS/blob/master/lab2/304.png)
+
+Ставим grub
+![305](https://github.com/afpetrenko/OS/blob/master/lab2/301.png)
+
+Создаем RAID массив с включением одного нового диска
+```
+mdadm --create --verbose /dev/md63 --level=1 --raid-devices /dev/sdb2
+```
+Выполняем
+```
+lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT
+```
+На sdb2 появился md63
+![307](https://github.com/afpetrenko/OS/blob/master/lab2/307.png)
+
+Выводим информацию о физических томах
+```
+pvs
+```
+Создаем новый физический том, включаем в него созданный RAID массив
+```
+pvcreate /dev/md63
+```
+![309](https://github.com/afpetrenko/OS/blob/master/lab2/309.png)
+
+Выполняем lsblk и pvs.
+В FSTYPE md63 теперь указано LVM2_member и /dev/md63 добавился к выводу pvs.
+Увеличим размер volume group system
+```
+vgextend system /dev/md63
+```
+![312](https://github.com/afpetrenko/OS/blob/master/lab2/312.png)
+
+Выполняем
+```
+vgdisplay system -v
+pvs
+vgs
+lvs -a -o+devices
+```
+Видим, теперь LV var, log, root находятся на /dev/md0
+![313](https://github.com/afpetrenko/OS/blob/master/lab2/313.png)
+![314](https://github.com/afpetrenko/OS/blob/master/lab2/314.png)
+
+Переносим данных со старого диска на новый для всех logical volume
+```
+pvmove -i 10 -n /dev/system/root /dev/md0 /dev/md63
+```
+![315](https://github.com/afpetrenko/OS/blob/master/lab2/315.png)
+
+Выполняем 
+```
+vgdisplay system -v
+pvs
+vgs
+lvs -a -o+devices
+lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT
+```
+![316](https://github.com/afpetrenko/OS/blob/master/lab2/316.png)
+![317](https://github.com/afpetrenko/OS/blob/master/lab2/317.png)
+
+Меняем VG, удалив из него диск старого RAID
+```
+vgreduce system /dev/md0
+```
+![318](https://github.com/afpetrenko/OS/blob/master/lab2/318.png)
+
+Выполняем
+```
+lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT
+pvs
+vgs
+```
+В выводе pvs исчез VG, Attr.
+В выводе vgs уменьшились значения PV, VSize, VFree.
+![319](https://github.com/afpetrenko/OS/blob/master/lab2/319.png)
+
+Перемонтировали /boot добавили новые диски sdb, sdc, sdd
+```
+fdisk -l
+lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT
+```
+![321](https://github.com/afpetrenko/OS/blob/master/lab2/321.png)
+
+Копируем таблицу разделов
+```
+sfdisk -d /dev/sda | sfdisk /dev/sdb
+```
+![322](https://github.com/afpetrenko/OS/blob/master/lab2/322.png)
+
+Копируем загрузочный раздел /boot с ssd4 на ssd5
+```
+dd if=/dev/sda1 of=/dev/sdb1
+```
+![323](https://github.com/afpetrenko/OS/blob/master/lab2/323.png)
+
+Ставим grub
+Меняем размер диска ssd5
+![324](https://github.com/afpetrenko/OS/blob/master/lab2/324.png)
+![325](https://github.com/afpetrenko/OS/blob/master/lab2/325.png)
+![326](https://github.com/afpetrenko/OS/blob/master/lab2/326.png)
+![327](https://github.com/afpetrenko/OS/blob/master/lab2/327.png)
+
+Перечитаем таблице разделов
+```
+partx -u /dev/sdb
+lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT
+```
+![328](https://github.com/afpetrenko/OS/blob/master/lab2/328.png)
+
+Добавим новый диск к текущему RAID массиву
+```
+mdadm --manage /dev/md63 --add /dev/sdb2
+```
+![329](https://github.com/afpetrenko/OS/blob/master/lab2/329.png)
+
+Расширим кол-во дисков в нашем массиве до 2-х штук
+![330](https://github.com/afpetrenko/OS/blob/master/lab2/330.png)
+
+Увеличение размера раздела на диске ssd4
+```
+fdisk /dev/sda
+```
+![331](https://github.com/afpetrenko/OS/blob/master/lab2/331.png)
+
+Перечитаем таблицу разделов
+```
+partx -u /dev/sda
+lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT
+```
+![332](https://github.com/afpetrenko/OS/blob/master/lab2/332.png)
+
+Расширим RAID
+```
+mdadm --grow /dev/md63 --size=max
+```
+Размер md127 в выводе lsblk стал 7.5G
+![333](https://github.com/afpetrenko/OS/blob/master/lab2/332.png)
+
+Вывод pvs
+```
+pvs
+```
+Расширяем размер PV
+```
+pvresize /dev/md63
+```
+![334](https://github.com/afpetrenko/OS/blob/master/lab2/334.png)
+
+Добавим появившееся место VG var, root
+```
+lvs
+lvextend -l +50%FREE /dev/system/root
+lvextend -l +100%FREE /dev/system/var
+lvs
+```
+![335](https://github.com/afpetrenko/OS/blob/master/lab2/335.png)
+
+Посмотрим имена новых HDD дисков
+```
+fdisk -l
+```
+![336](https://github.com/afpetrenko/OS/blob/master/lab2/336.png)
+
+Создаем RAID массив
+```
+mdadm --create /dev/md127 --level=1 --raid-devices=2 /dev/sdc /dev/sdd
+```
+![337](https://github.com/afpetrenko/OS/blob/master/lab2/337.png)
+
+Создаем новый PV на рейде из больших дисков
+Создаем в этом PV группу с названием data
+Создаем логический том размером всего свободного пространства и назовем его val_log
+```
+pvcreate data /dev/md127
+vgcreate data /dev/md127
+lvcreate -l 100%FREE -n var_log data
+```
+![338](https://github.com/afpetrenko/OS/blob/master/lab2/338.png)
+
+Отформатируем созданные раздел в ext4
+```
+mkfs.ext4 /dev/mapper/data-var_log
+```
+![339](https://github.com/afpetrenko/OS/blob/master/lab2/339.png)
+
+Перенос данных логов со старого раздела на новый
+Примонтируем временно новое хранилище логов
+```
+mount /dev/mapper/data-var_log /mnt
+```
+![340](https://github.com/afpetrenko/OS/blob/master/lab2/340.png)
+
+Синхронизируем разделы
+```
+apt install rsync
+rsync -avzr /var/log/ /mnt/
+```
+![341](https://github.com/afpetrenko/OS/blob/master/lab2/341.png)
+![342](https://github.com/afpetrenko/OS/blob/master/lab2/342.png)
+
+Выясним какие процессы работают сейчас с /var/log
+```
+apt install lsof
+lsof | grep '/var/log'
+```
+![343](https://github.com/afpetrenko/OS/blob/master/lab2/343.png)
+
+Остановим эти процессы
+Выполним финальную синхронизацию разделов
+```
+systemctl stop rsyslog.service syslog.socket
+rsync -avzr /var/log/ /mnt/
+```
+![344](https://github.com/afpetrenko/OS/blob/master/lab2/344.png)
+
+Поменяем местами разделы
+```
+umount /mnt
+umount /var/log
+mount /dev/mapper/data-var_log /var/log
+```
+![345](https://github.com/afpetrenko/OS/blob/master/lab2/345.png)
+
+Правим /etc/fstab fstab
+![346](https://github.com/afpetrenko/OS/blob/master/lab2/346.png)
+
+Перезагружаем машину и проверяем
+```
+pvs
+lvs
+vgs
+lsblk
+cat /proc/mdstat
+```
+![347](https://github.com/afpetrenko/OS/blob/master/lab2/347.png)
+![348](https://github.com/afpetrenko/OS/blob/master/lab2/348.png)
+
+
+
+
 
 
 
