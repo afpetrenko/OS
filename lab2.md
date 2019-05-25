@@ -114,13 +114,67 @@ cat /proc/mdstat
 
 Команда mount
 Выдала что в качестве корневой папки sda выступает /boot и ее параметры. Информацию о примонтированных устройствах.
-![11]((https://github.com/afpetrenko/OS/blob/master/lab2/11.png)
+![11](https://github.com/afpetrenko/OS/blob/master/lab2/11.png)
 
 ### Вывод
 Создали и настроили виртуальную машину на Debian с программным зеркальным RAID.
 Воспользовались некоторым командами для просмотра информации по дискам.
 
 ## Задание 2 (Эмуляция отказа одного из дисков)
+
+Удаляем жесткий диск в свойствах виртуальной машины, и с помощью команды
+```
+cat /proc/mdstat
+```
+Видим что активен RAID 1 но уже только с одним диском sdb
+![21](https://github.com/afpetrenko/OS/blob/master/lab2/21.png)
+
+С помощью
+```
+lsblk
+```
+Видим что появился новый sda диск
+![22](https://github.com/afpetrenko/OS/blob/master/lab2/22.png)
+
+Копируем таблицу разделов с старого диска на новый
+```
+sfdisk -f /dev/sdb | sfdisk /dev/sda
+```
+![24](https://github.com/afpetrenko/OS/blob/master/lab2/24.png)
+
+Проверяем результат с помощью
+```
+lsblk
+```
+Видим что новый диск sda размечен как и sdb
+И добавляем новый диск в RAID
+```
+mdadm --manage /dev/md0 --add /dev/sda2
+```
+![25](https://github.com/afpetrenko/OS/blob/master/lab2/25.png)
+
+Выводим инфорамцию о активном RAID sda sdb
+```
+cat /proc/mdstat
+```
+![26](https://github.com/afpetrenko/OS/blob/master/lab2/26.png)
+
+Выполняем синхронизацию кадров
+```
+dd if=/dev/sdb1 of=/dev/sda1
+```
+![27](https://github.com/afpetrenko/OS/blob/master/lab2/27.png)
+
+Еще раз проверяем инфорамцию о дисках и RAID. Устанавливаем grub на новый диск.
+```
+grub-install /dev/sda
+```
+![28](https://github.com/afpetrenko/OS/blob/master/lab2/28.png)
+
+### Вывод
+Собственноручно провели горячую замену жесткого диска, и установили новый диск в зеркальный RAID массив в паре с старым диском. Изучили новые команды.
+
+
 
 
 
